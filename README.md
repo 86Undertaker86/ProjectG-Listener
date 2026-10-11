@@ -1,7 +1,7 @@
 # ForzaListener
 
 Records Forza Horizon 6 telemetry ("Data Out") to compact `.bin` files — the recordings the
-[Project G](https://projectg.d-sidorchuk07.workers.dev) tuning calculator reads.
+[Project G](https://projectg.g-garage.workers.dev) tuning calculator reads.
 
 [Українською ↓](#українською)
 
@@ -22,7 +22,7 @@ Records Forza Horizon 6 telemetry ("Data Out") to compact `.bin` files — the r
 3. **Change…** picks the folder for the recordings (default `Documents\ForzaTelemetry`).
 4. **Start** and drive. Only race time is recorded; every car gets its own `.bin` file.
    **Stop** (or closing the window) writes everything to disk.
-5. Upload the `.bin` to the [calculator](https://projectg.d-sidorchuk07.workers.dev/calculator).
+5. Upload the `.bin` to the [calculator](https://projectg.g-garage.workers.dev/calculator).
    `listener_log.txt` in the same folder is the listener's journal if something goes wrong.
 
 ## What is recorded
@@ -62,7 +62,7 @@ build_listener.bat
 ## Українською
 
 Записує телеметрію Forza Horizon 6 («Data Out») у компактні файли `.bin` — саме їх читає
-калькулятор налаштувань [Project G](https://projectg.d-sidorchuk07.workers.dev).
+калькулятор налаштувань [Project G](https://projectg.g-garage.workers.dev).
 
 **[Завантажити ForzaListener.zip — остання версія](https://github.com/86Undertaker86/ProjectG-Listener/releases/latest/download/ForzaListener.zip)**
 (Windows 10 / 11, без встановлення).
@@ -78,7 +78,7 @@ build_listener.bat
 3. **Змінити…** — тека для записів (за замовчуванням `Документи\ForzaTelemetry`).
 4. **Старт** — і їдьте. Записується лише час заїзду; на кожну машину окремий файл `.bin`.
    **Стоп** (або закриття вікна) дописує все на диск.
-5. Завантажте `.bin` у [калькулятор](https://projectg.d-sidorchuk07.workers.dev/calculator).
+5. Завантажте `.bin` у [калькулятор](https://projectg.g-garage.workers.dev/calculator).
    Якщо щось пішло не так, у тій самій теці є `listener_log.txt` — журнал слухача.
 
 Слухач нічого не надсилає в інтернет: він лише приймає пакети від гри й пише файли.
