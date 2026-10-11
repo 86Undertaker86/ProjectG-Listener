@@ -1,0 +1,14 @@
+# Build output (build_listener.bat)
+dist/
+build/
+
+# Python
+__pycache__/
+.venv/
+
+# Recordings and the listener journal (when run from source)
+*.bin
+listener_log.txt
+
+# Commit message draft
+commit-msg.txt
