@@ -16,8 +16,9 @@ Records Forza Horizon 6 telemetry ("Data Out") to compact `.bin` files — the r
    - "Windows protected your PC" → **More info** → **Run anyway** (the program has no paid code
      signature).
    - If the firewall asks, allow access on private networks.
-2. The window shows this PC's IP and the port (default `49152`). In the game's settings find
-   **Data Out**: turn it on, set the IP address to that IP and the port to that port.
+2. The window shows this PC's IP and the port (default `49152`). In the game open
+   **Settings → HUD and Gameplay**, scroll down to the **Telemetry** section and there: turn
+   **Data Out** on, set the IP address to that IP and the port to that port.
 3. **Change…** picks the folder for the recordings (default `Documents\ForzaTelemetry`).
 4. **Start** and drive. Only race time is recorded; every car gets its own `.bin` file.
    **Stop** (or closing the window) writes everything to disk.
@@ -71,8 +72,9 @@ build_listener.bat
    - «Windows захистив ваш ПК» → **Докладніше** → **Все одно запустити** (програма не має
      платного цифрового підпису).
    - Якщо брандмауер спитає — дозвольте доступ у приватних мережах.
-2. У вікні видно IP цього ПК і порт (за замовчуванням `49152`). У налаштуваннях гри знайдіть
-   **Data Out**: увімкніть, IP-адреса = цей IP, порт = цей порт.
+2. У вікні видно IP цього ПК і порт (за замовчуванням `49152`). У грі відкрийте
+   **Налаштування → HUD та ігровий процес**, прогорніть униз до пункту **Телеметрія** і там:
+   увімкніть **Data Out**, IP-адреса = цей IP, порт = цей порт.
 3. **Змінити…** — тека для записів (за замовчуванням `Документи\ForzaTelemetry`).
 4. **Старт** — і їдьте. Записується лише час заїзду; на кожну машину окремий файл `.bin`.
    **Стоп** (або закриття вікна) дописує все на диск.
