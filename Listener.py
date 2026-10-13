@@ -154,10 +154,22 @@ FORMULA_FIELDS = (  # D: optional channels of the diagnostics (OPTIONAL_COLUMN_M
 EXTRA_FIELDS = (    # E: recommended — data-quality filters, CarSpec auto-fill
     "HandBrake", "Power", "Torque", *_x4("SurfaceRumble"),
 )
-RECORD_FIELDS = TUNER_FIELDS + FORMULA_FIELDS + EXTRA_FIELDS
+SURFACE_FIELDS = (  # H (1.0.2): rally / cross-country / drift — jumps, landings, body motion,
+    # water. Recorded ahead of the tuner rules that will read them (the owner's test recordings
+    # on dirt, off-road and drift need them from the start).
+    "AccelerationY",                          # vertical, without gravity: landings
+    "AngularVelocityX", "AngularVelocityZ",   # pitch and roll rates: nose-dives, rolls
+    "Pitch", "Roll",
+    *_x4("WheelInPuddle"),                    # water (0/1 flag or depth: to be seen on a recording)
+    "PositionY",                              # height: jumps, climbs
+)
+RECORD_FIELDS = TUNER_FIELDS + FORMULA_FIELDS + EXTRA_FIELDS + SURFACE_FIELDS
 
-# B + NumCylinders + CarOrdinal: constant per car -> file header; a change starts a new file.
-CAR_FIELDS = ("CarOrdinal", "CarClass", "CarPerformanceIndex", "DrivetrainType", "NumCylinders")
+# B + NumCylinders + CarOrdinal + CarGroup: constant per car -> file header; a change starts a
+# new file. CarGroup (1.0.2): the game's car group, maybe the car type (rally, buggy …) — its
+# values are not documented, so it is only kept, not checked.
+CAR_FIELDS = ("CarOrdinal", "CarClass", "CarPerformanceIndex", "DrivetrainType", "NumCylinders",
+              "CarGroup")
 # Sanity ranges: a datagram outside them is garbage and is dropped (not treated as a new car).
 # NumCylinders 0 is allowed so that electric cars are not rejected.
 CAR_LIMITS = {"CarClass": (0, 7), "CarPerformanceIndex": (100, 999), "NumCylinders": (0, 16)}

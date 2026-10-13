@@ -28,9 +28,11 @@ Records Forza Horizon 6 telemetry ("Data Out") to compact `.bin` files — the r
 ## What is recorded
 
 Each UDP packet the game sends (324 bytes) is filtered: only frames while racing and moving,
-and only the fields the calculator needs, are appended as fixed-size binary records. The file
-starts with `FH6T`, a version number and a JSON header (the field list, record size, the car's
-ID, class, performance index and drivetrain). Nothing leaves your PC — the listener only
+and only the fields the calculator needs, are appended as fixed-size binary records. Since 1.0.2
+that includes body motion, height and puddles (vertical acceleration, pitch, roll, position Y,
+wheel in puddle) for the coming rally, cross-country and drift presets. The file starts with
+`FH6T`, a version number and a JSON header (the field list, record size, the car's ID, class,
+performance index, drivetrain and car group). Nothing leaves your PC — the listener only
 receives packets from the game and writes files.
 
 ## Build from source
