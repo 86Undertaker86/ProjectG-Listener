@@ -1,5 +1,9 @@
 # ForzaListener
 
+> ### ▶ [Open the Project G calculator](https://projectg.g-garage.workers.dev)
+> A free tuning calculator for Forza Horizon 6. Record a lap with ForzaListener, upload the
+> `.bin` there, and it tells you what to change in your tune and why. No sign-up needed.
+
 Records Forza Horizon 6 telemetry ("Data Out") to compact `.bin` files — the recordings the
 [Project G](https://projectg.g-garage.workers.dev) tuning calculator reads.
 
@@ -62,6 +66,10 @@ build_listener.bat
 ---
 
 ## Українською
+
+> ### ▶ [Відкрити калькулятор Project G](https://projectg.g-garage.workers.dev)
+> Безкоштовний калькулятор тюнінгу для Forza Horizon 6. Запишіть коло з ForzaListener,
+> завантажте туди `.bin` — і він підкаже, що змінити у вашому тюні й чому. Без реєстрації.
 
 Записує телеметрію Forza Horizon 6 («Data Out») у компактні файли `.bin` — саме їх читає
 калькулятор налаштувань [Project G](https://projectg.g-garage.workers.dev).
