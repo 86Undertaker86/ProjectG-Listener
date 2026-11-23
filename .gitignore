@@ -12,3 +12,6 @@ listener_log.txt
 
 # Commit message draft
 commit-msg.txt
+
+# Claude Code notes and settings (private, never published here)
+.claude/
