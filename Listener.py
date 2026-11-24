@@ -15,6 +15,10 @@ What is not stored (see need.txt and fh6tuner):
 A new file is started whenever the car constants change (another car, new PI),
 so one file never mixes cars.
 
+Protection (1.0.3): SenderGuard lets through only datagrams from this PC or the local
+network, and only from the first address that sent a full packet; CaptureLimits stops a
+session after too many files or bytes, or when the disk runs low.
+
 File layout (little-endian):
     b"FH6T" | u16 FILE_VERSION | u32 n | n bytes of UTF-8 JSON header | records...
 The header holds "fields" ([[name, type], ...] — the record layout, packed in that
@@ -23,9 +27,11 @@ order), "record_size", "car" (CAR_FIELDS values), "min_speed_mps" and "started".
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import operator
 import re
+import shutil
 import socket
 import struct
 import time
@@ -184,6 +190,14 @@ SOCKET_BUFFER_BYTES = 4 << 20  # ~12k datagrams queue up while the disk is busy 
 SOCKET_TIMEOUT_S = 0.5         # recv wakes up regularly so Ctrl+C works on Windows
 FLUSH_INTERVAL_S = 1.0         # the file lags (and a crash loses) at most this much
 
+# Limits of one capture session (Start … Stop), our choice (1.0.3). Normal use is far below:
+# 1–10 files (one per car / PI); an hour at 138 packets/s of 219-byte records is ~110 MB.
+MAX_FILES_PER_SESSION = 100
+MAX_SESSION_BYTES = 2 << 30    # 2 GiB, ~18 h of driving
+MIN_FREE_DISK_BYTES = 1 << 30  # stop while 1 GiB is still free, so Windows never runs out
+DISK_CHECK_INTERVAL_S = 5.0    # free space is checked this often while writing, and on each new file
+MAX_REPORTED_SENDERS = 5       # ignored addresses named in the journal; the rest are only counted
+
 STRUCT_CODE = {"S8": "b", "S16": "h", "S32": "i", "S64": "q",
                "U8": "B", "U16": "H", "U32": "I", "U64": "Q", "F32": "f", "F64": "d"}
 _FORMAT_LINE = re.compile(r"\s*([SUFX])(\d+)\s+(\w+)", re.IGNORECASE)
@@ -235,11 +249,105 @@ def _field_struct(name: str, layout: dict) -> tuple:
     return struct.Struct("<" + STRUCT_CODE[kind]), offset
 
 
+def is_local_address(address: str) -> bool:
+    """This PC, the home / local network (also carrier NAT 100.64/10), not the internet."""
+    try:
+        return not ipaddress.ip_address(address).is_global
+    except ValueError:
+        return False
+
+
+class SenderGuard:
+    """Which datagrams may reach the Recorder. The socket listens on every adapter, so anyone
+    on the network could send packets; only local addresses are accepted, and the first one that
+    sends a full packet becomes the only sender for the session (a new session forgets it).
+    Short datagrams don't pick the sender: the Recorder reports them."""
+
+    def __init__(self, min_size: int, stats: Counter, log: Callable[[str], None]):
+        self.min_size = min_size
+        self.stats = stats
+        self.log = log
+        self.sender: Optional[str] = None
+        self._reported = set()
+
+    def accept(self, address: str, size: int) -> bool:
+        if address == self.sender:
+            return True
+        if not is_local_address(address):
+            self._ignore(address, "public",
+                         f"Пакети з інтернет-адреси {address} ігноруються: приймаю лише з цього ПК "
+                         "і локальної мережі.")
+            return False
+        if self.sender is None:
+            if size >= self.min_size:
+                self.sender = address
+                self.log(f"Телеметрія надходить з адреси {address}. Пакети з інших адрес ігноруються.")
+            return True
+        self._ignore(address, "foreign",
+                     f"Пакети з адреси {address} ігноруються: запис іде з {self.sender}. "
+                     "Щоб змінити адресу, почніть запис заново.")
+        return False
+
+    def _ignore(self, address: str, kind: str, message: str) -> None:
+        self.stats["received"] += 1   # the summary's "received" counts every datagram
+        self.stats[kind] += 1
+        if address not in self._reported and len(self._reported) < MAX_REPORTED_SENDERS:
+            self._reported.add(address)
+            self.log(message)
+
+
+class CaptureLimits:
+    """How much one capture session may write: files, bytes, and the disk's free space. Each
+    check returns None, or the journal message why the session must stop."""
+
+    def __init__(self, output_dir: Union[str, Path], max_files: int = MAX_FILES_PER_SESSION,
+                 max_bytes: int = MAX_SESSION_BYTES, min_free_bytes: int = MIN_FREE_DISK_BYTES,
+                 check_interval_s: float = DISK_CHECK_INTERVAL_S,
+                 disk_free: Optional[Callable[[Path], int]] = None):
+        self.output_dir = Path(output_dir)
+        self.max_files = max_files
+        self.max_bytes = max_bytes
+        self.min_free_bytes = min_free_bytes
+        self.check_interval_s = check_interval_s
+        self._disk_free = disk_free or (lambda path: shutil.disk_usage(path).free)
+        self._next_disk_check = 0.0
+
+    def before_new_file(self, files_opened: int) -> Optional[str]:
+        if files_opened >= self.max_files:
+            return (f"Запис зупинено: за цей сеанс створено вже {self.max_files} файлів (так буває, "
+                    "коли хтось надсилає чужі пакети). Записане збережено; почніть запис заново.")
+        return self._check_disk(force=True)
+
+    def before_write(self, bytes_written: int, size: int) -> Optional[str]:
+        if bytes_written + size > self.max_bytes:
+            return (f"Запис зупинено: за цей сеанс записано вже {_gib(self.max_bytes)} ГБ. "
+                    "Записане збережено; почніть запис заново.")
+        return self._check_disk()
+
+    def _check_disk(self, force: bool = False) -> Optional[str]:
+        now = time.monotonic()
+        if not force and now < self._next_disk_check:
+            return None
+        self._next_disk_check = now + self.check_interval_s
+        try:
+            free = self._disk_free(self.output_dir)
+        except OSError:
+            return None
+        if free < self.min_free_bytes:
+            return (f"Запис зупинено: на диску лишилося менше {_gib(self.min_free_bytes)} ГБ вільного "
+                    "місця. Записане збережено; звільніть місце або виберіть іншу теку.")
+        return None
+
+
+def _gib(size: int) -> str:
+    return f"{size / (1 << 30):g}"
+
+
 class Recorder:
     """Filters datagrams and appends compact records to .bin files in output_dir."""
 
     def __init__(self, output_dir: Union[str, Path], log: Callable[[str], None] = print,
-                 layout_text: str = PACKET_LAYOUT):
+                 layout_text: str = PACKET_LAYOUT, limits: Optional[CaptureLimits] = None):
         self.log = log            # where status messages go (console print, or the GUI journal)
         layout = load_layout(layout_text)
         used = ("IsRaceOn",) + RECORD_FIELDS + CAR_FIELDS
@@ -266,11 +374,17 @@ class Recorder:
         self._stationary = False  # inside a stretch of frames at <= STATIONARY_SPEED_MPS
         self._pending = None      # latest frame of that stretch, written when it ends
         self._last_flush = 0.0
+        self.limits = limits or CaptureLimits(self.output_dir)
+        self.bytes_written = 0    # headers + records of this session
+        self.stopped: Optional[str] = None   # why a limit stopped the session
 
     def process(self, data: bytes) -> None:
         """Handles one datagram."""
         stats = self.stats
         stats["received"] += 1
+        if self.stopped:
+            stats["limit"] += 1
+            return
         if len(data) < self.min_size:
             if not stats["short"]:
                 self.log(f"Пакет {len(data)} байт замість ≥ {self.min_size} — перевірте формат Data Out у грі.")
@@ -285,7 +399,7 @@ class Recorder:
         car = self._car_key(data)
         if car != self._car:
             if not self._open_file(car):
-                stats["bad_car"] += 1
+                stats["limit" if self.stopped else "bad_car"] += 1
                 return
         elif self._racing is False:
             self.log("Заїзд продовжено — запис триває.")
@@ -323,7 +437,9 @@ class Recorder:
         size_kb = sum(p.stat().st_size for p in self.files if p.exists()) / 1024
         dropped = ", ".join(f"{label}: {s[key]}" for key, label in (
             ("not_racing", "не в заїзді"), ("stationary", "стоянка"), ("short", "неповні"),
-            ("bad_car", "некоректні дані машини"), ("errors", "помилки прийому")) if s[key])
+            ("bad_car", "некоректні дані машини"), ("errors", "помилки прийому"),
+            ("foreign", "з інших адрес"), ("public", "з інтернету"),
+            ("limit", "після зупинки за лімітом")) if s[key])
         return (f"Отримано пакетів: {s['received']}, збережено: {s['stored']} "
                 f"({size_kb:.0f} КБ, файлів: {len(self.files)})"
                 + (f"; відкинуто — {dropped}" if dropped else "") + ".")
@@ -334,9 +450,13 @@ class Recorder:
         if any(not lo <= values[name] <= hi for name, (lo, hi) in CAR_LIMITS.items()):
             return False
         self._close_file()
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        reason = self.limits.before_new_file(len(self.files))
+        if reason:
+            self._stop(reason)
+            return False
         started = datetime.now()
         stem = f"{started:%Y-%m-%d_%H-%M-%S}_car{values['CarOrdinal']}_pi{values['CarPerformanceIndex']}"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
         path, n = self.output_dir / f"{stem}.bin", 2
         while path.exists():
             path, n = self.output_dir / f"{stem}_{n}.bin", n + 1
@@ -348,7 +468,9 @@ class Recorder:
             "started": started.isoformat(timespec="seconds"),
         }).encode("utf-8")
         self._file = open(path, "wb")
-        self._file.write(FILE_HEADER.pack(MAGIC, FILE_VERSION, len(header)) + header)
+        head = FILE_HEADER.pack(MAGIC, FILE_VERSION, len(header)) + header
+        self._file.write(head)
+        self.bytes_written += len(head)
         self._file.flush()
         self._last_flush = time.monotonic()
         self._car = car
@@ -359,7 +481,15 @@ class Recorder:
         return True
 
     def _write(self, record: bytes) -> None:
+        if self.stopped:          # _stop() closes the file: its pending frame is not written
+            return
+        reason = self.limits.before_write(self.bytes_written, len(record))
+        if reason:
+            self.stats["limit"] += 1
+            self._stop(reason)
+            return
         self._file.write(record)
+        self.bytes_written += len(record)
         self.stats["stored"] += 1
         now = time.monotonic()
         if now - self._last_flush >= FLUSH_INTERVAL_S:
@@ -370,6 +500,12 @@ class Recorder:
         if self._pending is not None:
             self._write(self._pending)
             self._pending = None
+
+    def _stop(self, reason: str) -> None:
+        """A limit was reached: keep what is written, accept nothing more this session."""
+        self.stopped = reason
+        self.log(reason)
+        self._close_file()
 
     def _close_file(self) -> None:
         if self._file is None:
@@ -382,11 +518,13 @@ class Recorder:
 
 
 class Listener:
-    """UDP socket feeding a Recorder. run() blocks until stop() or Ctrl+C."""
+    """UDP socket feeding a Recorder through a SenderGuard. run() blocks until stop(), Ctrl+C
+    or a capture limit."""
 
     def __init__(self, udp_ip: str, udp_port: int, output_dir: Union[str, Path],
                  log: Callable[[str], None] = print):
         self.recorder = Recorder(output_dir, log)
+        self.guard = SenderGuard(self.recorder.min_size, self.recorder.stats, log)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCKET_BUFFER_BYTES)
@@ -398,11 +536,12 @@ class Listener:
         self._running = False
 
     def run(self) -> None:
-        recv, process = self.sock.recv, self.recorder.process
+        recv, process, accept = self.sock.recvfrom, self.recorder.process, self.guard.accept
+        recorder = self.recorder
         self._running = True
-        while self._running:
+        while self._running and not recorder.stopped:
             try:
-                data = recv(RECV_BYTES)
+                data, (address, _port) = recv(RECV_BYTES)
             except TimeoutError:          # no packets for SOCKET_TIMEOUT_S: game paused or closed
                 self.recorder.flush()
                 continue
@@ -411,7 +550,8 @@ class Listener:
                     break
                 self.recorder.stats["errors"] += 1
                 continue
-            process(data)
+            if accept(address, len(data)):
+                process(data)
 
     def stop(self) -> None:
         self._running = False

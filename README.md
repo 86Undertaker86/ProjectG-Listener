@@ -14,6 +14,10 @@ Records Forza Horizon 6 telemetry ("Data Out") to compact `.bin` files — the r
 **[ForzaListener.zip — latest release](https://github.com/86Undertaker86/ProjectG-Listener/releases/latest/download/ForzaListener.zip)**
 (Windows 10 / 11, no installation). All versions: [Releases](https://github.com/86Undertaker86/ProjectG-Listener/releases).
 
+Check the download (optional): the release page shows the SHA-256 of `ForzaListener.zip`. In
+PowerShell run `Get-FileHash ForzaListener.zip` — the Hash must be the same (upper or lower
+case doesn't matter).
+
 ## How to use
 
 1. Unzip and run `ForzaListener.exe` (keep the whole folder: the exe needs `_internal` next to it).
@@ -38,6 +42,11 @@ wheel in puddle) for the coming rally, cross-country and drift presets. The file
 `FH6T`, a version number and a JSON header (the field list, record size, the car's ID, class,
 performance index, drivetrain and car group). Nothing leaves your PC — the listener only
 receives packets from the game and writes files.
+
+Since 1.0.3 it accepts packets only from this PC or your local network, and only from the
+first address that sends them (the journal names it; to switch, start a new recording), so
+another device on the network can't mix its packets into yours. One recording stops by itself
+after 100 files or 2 GB, or when less than 1 GB is left on the disk; what was written is kept.
 
 ## Build from source
 
@@ -77,6 +86,10 @@ build_listener.bat
 **[Завантажити ForzaListener.zip — остання версія](https://github.com/86Undertaker86/ProjectG-Listener/releases/latest/download/ForzaListener.zip)**
 (Windows 10 / 11, без встановлення).
 
+Перевірити файл (за бажанням): на сторінці релізу вказано SHA-256 файлу `ForzaListener.zip`.
+У PowerShell виконайте `Get-FileHash ForzaListener.zip` — Hash має збігатися (великі чи малі
+літери — неважливо).
+
 1. Розпакуйте й запустіть `ForzaListener.exe` (тека має лишатися цілою: exe не працює без
    `_internal` поруч).
    - «Windows захистив ваш ПК» → **Докладніше** → **Все одно запустити** (програма не має
@@ -91,5 +104,9 @@ build_listener.bat
 5. Завантажте `.bin` у [калькулятор](https://projectg.g-garage.workers.dev/calculator).
    Якщо щось пішло не так, у тій самій теці є `listener_log.txt` — журнал слухача.
 
-Слухач нічого не надсилає в інтернет: він лише приймає пакети від гри й пише файли.
+Слухач нічого не надсилає в інтернет: він лише приймає пакети від гри й пише файли. З версії
+1.0.3 він приймає пакети лише з цього ПК або вашої локальної мережі і лише з першої адреси, що
+їх надіслала (її видно в журналі; щоб змінити — почніть запис заново), тож інший пристрій у
+мережі не змішає свої пакети з вашими. Один запис сам зупиняється після 100 файлів або 2 ГБ,
+або коли на диску лишається менше 1 ГБ; записане зберігається.
 Зібрати самому — див. «Build from source» вище. Ліцензія — [MIT](LICENSE).
